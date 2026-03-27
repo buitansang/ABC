@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiến Trúc Module trên iOS và macOS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root, [data-theme="light"] {
+      --color-bg: #f7f6f2;
+      --color-surface: #fdfcfa;
+      --color-surface-2: #ffffff;
+      --color-surface-offset: #edeae5;
+      --color-border: #d4d1ca;
+      --color-divider: #dcd9d5;
+      --color-text: #28251d;
+      --color-text-muted: #7a7974;
+      --color-text-faint: #bab9b4;
+      --color-primary: #01696f;
+      --color-primary-hover: #0c4e54;
+      --color-primary-light: #e0f0ef;
+      --color-code-bg: #f0ede8;
+      --color-code-border: #d0cdc8;
+      --color-sidebar-bg: #f2f0eb;
+      --color-sidebar-active: #cedcd8;
+      --shadow-sm: 0 1px 3px rgba(40,37,29,0.07);
+      --shadow-md: 0 4px 16px rgba(40,37,29,0.09);
+      --shadow-lg: 0 12px 40px rgba(40,37,29,0.12);
+      --font-body: 'Merriweather', Georgia, serif;
+      --font-ui: 'Inter', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --radius-sm: 0.375rem;
+      --radius-md: 0.5rem;
+      --radius-lg: 0.75rem;
+      --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    [data-theme="dark"] {
+      --color-bg: #171614;
+      --color-surface: #1c1b19;
+      --color-surface-2: #201f1d;
+      --color-surface-offset: #1d1c1a;
+      --color-border: #393836;
+      --color-divider: #262523;
+      --color-text: #cdccca;
+      --color-text-muted: #797876;
+      --color-text-faint: #5a5957;
+      --color-primary: #4f98a3;
+      --color-primary-hover: #227f8b;
+      --color-primary-light: #1e3030;
+      --color-code-bg: #22211f;
+      --color-code-border: #3a3937;
+      --color-sidebar-bg: #1a1918;
+      --color-sidebar-active: #1e3030;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.25);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.35);
+      --shadow-lg: 0 12px 40px rgba(0,0,0,0.45);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: 4rem; -webkit-font-smoothing: antialiased; }
+    body {
+      font-family: var(--font-body);
+      font-size: 1rem;
+      line-height: 1.8;
+      color: var(--color-text);
+      background: var(--color-bg);
+      min-height: 100dvh;
+    }
+
+    /* Layout */
+    .layout { display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+      background: var(--color-sidebar-bg);
+      border-right: 1px solid var(--color-border);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+      transition: transform var(--transition);
+    }
+    .sidebar::-webkit-scrollbar { width: 5px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
+
+    .sidebar-header {
+      padding: 1.5rem 1.25rem 1rem;
+      border-bottom: 1px solid var(--color-divider);
+    }
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      text-decoration: none;
+      margin-bottom: 0.5rem;
+    }
+    .sidebar-logo svg { flex-shrink: 0; color: var(--color-primary); }
+    .sidebar-title {
+      font-family: var(--font-ui);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--color-primary);
+    }
+    .sidebar-subtitle {
+      font-family: var(--font-ui);
+      font-size: 0.72rem;
+      color: var(--color-text-muted);
+      line-height: 1.4;
+    }
+
+    .sidebar-nav { padding: 1rem 0; flex: 1; }
+    .nav-section { margin-bottom: 0.25rem; }
+    .nav-section-label {
+      font-family: var(--font-ui);
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--color-text-faint);
+      padding: 0.75rem 1.25rem 0.25rem;
+    }
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1.25rem;
+      font-family: var(--font-ui);
+      font-size: 0.8rem;
+      color: var(--color-text-muted);
+      text-decoration: none;
+      border-radius: 0;
+      transition: all var(--transition);
+      border-left: 2px solid transparent;
+    }
+    .nav-link:hover {
+      color: var(--color-text);
+      background: var(--color-sidebar-active);
+      border-left-color: var(--color-primary);
+    }
+    .nav-link.active {
+      color: var(--color-primary);
+      background: var(--color-primary-light);
+      border-left-color: var(--color-primary);
+      font-weight: 600;
+    }
+    .nav-link-sub {
+      padding-left: 2rem;
+      font-size: 0.75rem;
+    }
+
+    /* Topbar */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      height: 3.5rem;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .topbar-left { display: flex; align-items: center; gap: 0.75rem; }
+    .topbar-title {
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--color-text);
+    }
+    .topbar-badge {
+      font-family: var(--font-ui);
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      border-radius: 999px;
+      letter-spacing: 0.02em;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      border-radius: var(--radius-md);
+      background: transparent;
+      border: 1px solid var(--color-border);
+      color: var(--color-text-muted);
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .btn-icon:hover { background: var(--color-surface-offset); color: var(--color-text); }
+    .hamburger { display: none; }
+
+    /* Main content */
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .content {
+      flex: 1;
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem 5rem;
+      width: 100%;
+    }
+
+    /* Hero / Cover */
+    .book-cover {
+      background: linear-gradient(135deg, var(--color-primary) 0%, #0a4a52 100%);
+      border-radius: var(--radius-lg);
+      padding: 3rem 2.5rem;
+      margin-bottom: 3rem;
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+    .book-cover::before {
+      content: '';
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 200px; height: 200px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 50%;
+    }
+    .book-cover::after {
+      content: '';
+      position: absolute;
+      bottom: -60px; left: -30px;
+      width: 250px; height: 250px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 50%;
+    }
+    .cover-label {
+      font-family: var(--font-ui);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      margin-bottom: 0.75rem;
+    }
+    .cover-title {
+      font-family: var(--font-ui);
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 0.75rem;
+      position: relative;
+    }
+    .cover-subtitle {
+      font-family: var(--font-ui);
+      font-size: 0.95rem;
+      opacity: 0.8;
+      margin-bottom: 1.5rem;
+      max-width: 480px;
+    }
+    .cover-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .cover-chip {
+      font-family: var(--font-ui);
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: rgba(255,255,255,0.15);
+      padding: 0.3rem 0.75rem;
+      border-radius: 999px;
+      backdrop-filter: blur(4px);
+    }
+
+    /* Chapter sections */
+    .chapter {
+      margin-bottom: 4rem;
+      scroll-margin-top: 4rem;
+    }
+    .chapter-number {
+      font-family: var(--font-ui);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--color-primary);
+      margin-bottom: 0.5rem;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--font-ui);
+      line-height: 1.25;
+      color: var(--color-text);
+    }
+    h1 { font-size: clamp(1.6rem, 3vw, 2.25rem); font-weight: 800; margin-bottom: 1rem; }
+    h2 { font-size: clamp(1.2rem, 2.5vw, 1.55rem); font-weight: 700; margin-top: 2.5rem; margin-bottom: 0.875rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--color-divider); }
+    h3 { font-size: 1.05rem; font-weight: 700; margin-top: 1.75rem; margin-bottom: 0.625rem; color: var(--color-primary-hover); }
+    h4 { font-size: 0.95rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.5rem; }
+
+    p { margin-bottom: 1.25rem; max-width: 68ch; }
+    p:last-child { margin-bottom: 0; }
+    strong { font-weight: 700; color: var(--color-text); }
+    em { font-style: italic; }
+    a { color: var(--color-primary); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; transition: color var(--transition); }
+    a:hover { color: var(--color-primary-hover); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1.25rem; }
+    li { margin-bottom: 0.4rem; max-width: 68ch; }
+    li > ul, li > ol { margin-top: 0.4rem; margin-bottom: 0.25rem; }
+
+    /* Code */
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.83em;
+      background: var(--color-code-bg);
+      border: 1px solid var(--color-code-border);
+      padding: 0.1em 0.35em;
+      border-radius: var(--radius-sm);
+      color: var(--color-primary);
+    }
+    pre {
+      background: var(--color-code-bg);
+      border: 1px solid var(--color-code-border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.5rem;
+      overflow-x: auto;
+      margin: 1.25rem 0;
+      position: relative;
+    }
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 0.83rem;
+      color: var(--color-text);
+      line-height: 1.7;
+    }
+    .pre-lang {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.75rem;
+      font-family: var(--font-ui);
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-faint);
+    }
+
+    /* Blockquote */
+    blockquote {
+      border-left: 3px solid var(--color-primary);
+      background: var(--color-primary-light);
+      padding: 1rem 1.25rem;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin: 1.25rem 0;
+      font-style: italic;
+      color: var(--color-text-muted);
+    }
+    blockquote p { margin-bottom: 0; max-width: 100%; }
+
+    /* Cards */
+    .card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.5rem;
+      margin: 1.25rem 0;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-title {
+      font-family: var(--font-ui);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--color-primary);
+      margin-bottom: 0.625rem;
+    }
+
+    /* Layer diagram */
+    .layer-diagram {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin: 1.5rem 0;
+    }
+    .layer {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.875rem 1.25rem;
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      transition: all var(--transition);
+    }
+    .layer:hover { border-color: var(--color-primary); box-shadow: var(--shadow-sm); }
+    .layer-num {
+      font-family: var(--font-ui);
+      font-size: 0.7rem;
+      font-weight: 800;
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .layer-1 .layer-num { background: #01696f; color: white; }
+    .layer-2 .layer-num { background: #0a5a60; color: white; }
+    .layer-3 .layer-num { background: #134a4e; color: white; }
+    .layer-4 .layer-num { background: #1c3a3d; color: white; }
+    .layer-5 .layer-num { background: #242a2b; color: white; }
+    .layer-info { flex: 1; }
+    .layer-name {
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+    .layer-desc {
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      color: var(--color-text-muted);
+    }
+
+    /* Pros/Cons table */
+    .pros-cons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1.25rem 0;
+    }
+    .pros-col, .cons-col {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.25rem;
+    }
+    .pros-col { border-top: 3px solid #437a22; }
+    .cons-col { border-top: 3px solid #a12c7b; }
+    .col-header {
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.625rem;
+    }
+    .pros-col .col-header { color: #437a22; }
+    .cons-col .col-header { color: #a12c7b; }
+    .pros-col ul, .cons-col ul { padding-left: 1.25rem; margin: 0; }
+    .pros-col li, .cons-col li {
+      font-family: var(--font-ui);
+      font-size: 0.78rem;
+      margin-bottom: 0.35rem;
+      color: var(--color-text-muted);
+    }
+
+    /* TOC */
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+    }
+    .toc-item {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 0.875rem 1rem;
+      text-decoration: none;
+      color: var(--color-text);
+      transition: all var(--transition);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.625rem;
+    }
+    .toc-item:hover {
+      border-color: var(--color-primary);
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+    .toc-num {
+      font-family: var(--font-ui);
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: var(--color-primary);
+      background: var(--color-primary-light);
+      width: 1.4rem;
+      height: 1.4rem;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .toc-text {
+      font-family: var(--font-ui);
+      font-size: 0.78rem;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    /* Divider */
+    hr { border: none; border-top: 1px solid var(--color-divider); margin: 2rem 0; }
+
+    /* Info box */
+    .info-box {
+      background: var(--color-primary-light);
+      border: 1px solid var(--color-primary);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      margin: 1.25rem 0;
+      font-family: var(--font-ui);
+      font-size: 0.82rem;
+      color: var(--color-primary-hover);
+    }
+    .info-box strong { color: var(--color-primary); }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .sidebar { display: none; position: fixed; left: 0; top: 0; height: 100vh; transform: translateX(-100%); }
+      .sidebar.open { display: flex; transform: translateX(0); box-shadow: var(--shadow-lg); }
+      .hamburger { display: flex; }
+      .content { padding: 1.5rem 1rem 4rem; }
+      .pros-cons { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .book-cover { padding: 2rem 1.5rem; }
+      .toc-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Overlay */
+    .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 9; }
+    .overlay.active { display: block; }
+
+    /* Footnote area */
+    .author-card {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      margin: 1.25rem 0;
+    }
+    .author-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: var(--font-ui);
+      font-weight: 800;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .author-info { flex: 1; }
+    .author-name {
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    .author-role {
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      color: var(--color-text-muted);
+      margin-bottom: 0.5rem;
+    }
+    .author-bio {
+      font-size: 0.85rem;
+      color: var(--color-text-muted);
+      line-height: 1.6;
+    }
+
+    /* Scrollspy highlight */
+    .chapter:target h1, .chapter:target h2 {
+      color: var(--color-primary);
+    }
+  </style>
+</head>
+<body>
+<div class="overlay" id="overlay" onclick="closeMenu()"></div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a href="#cover" class="sidebar-logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+        </svg>
+        <div>
+          <div class="sidebar-title">Kiến Trúc Module</div>
+          <div class="sidebar-subtitle">iOS &amp; macOS</div>
+        </div>
+      </a>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">Giới thiệu</div>
+        <a href="#cover" class="nav-link">📖 Trang bìa</a>
+        <a href="#dedication" class="nav-link">💬 Lời đề tặng</a>
+        <a href="#author" class="nav-link">👤 Về tác giả</a>
+        <a href="#toc" class="nav-link">📋 Mục lục</a>
+        <a href="#intro" class="nav-link">🚀 Giới thiệu</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Nội dung chính</div>
+        <a href="#modular-arch" class="nav-link">🏗️ Kiến trúc Module</a>
+        <a href="#layers" class="nav-link nav-link-sub">↳ Các tầng</a>
+        <a href="#iss-example" class="nav-link nav-link-sub">↳ Ví dụ ISS</a>
+        <a href="#libraries" class="nav-link">📦 Thư viện Apple</a>
+        <a href="#dynamic-static" class="nav-link nav-link-sub">↳ Dynamic vs Static</a>
+        <a href="#examining" class="nav-link nav-link-sub">↳ Kiểm tra thư viện</a>
+        <a href="#swift-compiler" class="nav-link">⚙️ Swift Compiler</a>
+        <a href="#development" class="nav-link">🛠️ Phát triển Module</a>
+        <a href="#xcodegen" class="nav-link nav-link-sub">↳ XcodeGen</a>
+        <a href="#ground-rules" class="nav-link nav-link-sub">↳ Quy tắc nền</a>
+        <a href="#testing" class="nav-link nav-link-sub">↳ Kiểm thử</a>
+        <a href="#app-extensions" class="nav-link">🔌 App Extensions</a>
+        <a href="#benchmarking" class="nav-link">📊 Đo hiệu suất</a>
+        <a href="#best-practices" class="nav-link">✅ Thực hành tốt</a>
+        <a href="#dep-managers" class="nav-link">🔧 Quản lý phụ thuộc</a>
+        <a href="#design-patterns" class="nav-link">🎨 Design Patterns</a>
+        <a href="#automation" class="nav-link">🤖 Tự động hóa</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Kết thúc</div>
+        <a href="#theend" class="nav-link">🏁 Kết thúc</a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="btn-icon hamburger" onclick="toggleMenu()" aria-label="Menu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <span class="topbar-title">Kiến Trúc Module trên iOS và macOS</span>
+        <span class="topbar-badge">v2.1.0</span>
+      </div>
+      <div class="topbar-right">
+        <a href="https://github.com/CyrilCermak/modular_architecture_on_ios" target="_blank" rel="noopener" class="btn-icon" aria-label="GitHub">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+        <button class="btn-icon" data-theme-toggle aria-label="Chuyển chế độ tối/sáng">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- Book Cover -->
+      <section class="chapter" id="cover">
+        <div class="book-cover">
+          <div class="cover-label">Tài liệu kỹ thuật · Phiên bản tiếng Việt</div>
+          <h1 class="cover-title">Kiến Trúc Module trên iOS và macOS</h1>
+          <p class="cover-subtitle">Xây dựng ứng dụng iOS/macOS lớn, có thể mở rộng và các framework với Thiết kế Hướng Domain</p>
+          <div class="cover-meta">
+            <span class="cover-chip">📱 iOS &amp; macOS</span>
+            <span class="cover-chip">🏗️ Kiến trúc Module</span>
+            <span class="cover-chip">✍️ Cyril Cermak</span>
+            <span class="cover-chip">🔖 CFBundleVersion 2.1.0</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Lịch sử phiên bản</div>
+          <ul>
+            <li><strong>2.1.0</strong> — Giới thiệu chương App Extensions</li>
+            <li><strong>2.0.0</strong> — Giới thiệu chương Đo hiệu suất Kiến trúc Module</li>
+            <li><strong>1.0.0</strong> — Phát hành công khai lần đầu</li>
+          </ul>
+        </div>
+        <p>Cần hỗ trợ hoặc tư vấn? Liên hệ <a href="https://www.linkedin.com/in/cyril-cermak-210a8b6b/" target="_blank">Cyril Cermak trên LinkedIn</a>.</p>
+        <p>
+          <a href="https://github.com/CyrilCermak/modular_architecture_on_ios/blob/master/modular_architecture_on_ios.pdf" target="_blank">📥 Tải PDF</a> &nbsp;|&nbsp;
+          <a href="https://github.com/CyrilCermak/modular_architecture_on_ios/blob/master/modular_architecture_on_ios.epub" target="_blank">📚 Tải ePUB</a>
+        </p>
+      </section>
+
+      <hr>
+
+      <!-- Dedication -->
+      <section class="chapter" id="dedication">
+        <div class="chapter-number">Lời đề tặng</div>
+        <h1>Tặng cho...</h1>
+        <blockquote><p>"Tặng Mẹ và Bố, vì họ đã thực sự cố gắng."</p></blockquote>
+        <blockquote><p>"Tặng cộng đồng — quy tắc số 5 của thần tượng thời thơ ấu của tôi, Arnold Schwarzenegger, là: đừng chỉ nhận, hãy cho đi. Đây là cách tôi đang cho lại."</p></blockquote>
+        <blockquote><p>"Tặng những đồng nghiệp tuyệt vời của tôi, những người đã cống hiến hết mình, nhờ đó cuốn sách này mới được viết ra."</p></blockquote>
+        <blockquote><p>"Cuối cùng, tặng người bạn gái hiện tại của tôi... dù cô ấy là ai vào lúc này."</p></blockquote>
+      </section>
+
+      <hr>
+
+      <!-- Author -->
+      <section class="chapter" id="author">
+        <div class="chapter-number">Giới thiệu</div>
+        <h1>Về Tác Giả</h1>
+        <div class="author-card">
+          <div class="author-avatar">CC</div>
+          <div class="author-info">
+            <div class="author-name"><a href="https://www.linkedin.com/in/cyril-cermak-210a8b6b/" target="_blank">Cyril Cermak</a></div>
+            <div class="author-role">iOS Architect · Porsche AG, Stuttgart</div>
+            <p class="author-bio">Kỹ sư phần mềm đam mê và là tác giả cuốn sách này. Phần lớn sự nghiệp của tôi được dành cho việc xây dựng ứng dụng iOS và framework iOS. Tôi bắt đầu tại ứng dụng Skoda Auto Connect ở Prague, sau đó làm cho Freelancer Ltd tại Sydney, trải qua nhiều startup, và hiện đang là iOS Architect tại Porsche AG, Stuttgart.</p>
+          </div>
+        </div>
+
+        <h2>Về Người Đánh Giá</h2>
+        <div class="author-card">
+          <div class="author-avatar" style="background:#437a22">KK</div>
+          <div class="author-info">
+            <div class="author-name"><a href="https://www.linkedin.com/in/yesvegan/" target="_blank">Kristopher K. Kruger</a></div>
+            <div class="author-role">iOS Software Developer</div>
+            <p class="author-bio">Người đánh giá "ngẫu nhiên và biết ơn mãi mãi" cho cuốn sách này trong cả hai lần phát hành. Chúng tôi gặp nhau giữa một mớ code Swift, Ruby và GitHub Actions trong quá trình phát triển dự án. Đánh giá của tôi nổi tiếng với sự kết hợp độc đáo giữa phân tích sắc bén và hài hước phi lý.</p>
+          </div>
+        </div>
+
+        <h2>Về Cộng Tác Viên</h2>
+        <p>Cảm ơn đặc biệt gửi đến <a href="https://www.linkedin.com/in/david-ullmer-214bbb223/" target="_blank">David Ullmer</a>, đồng nghiệp thân mến của tôi, người đã thực hiện luận văn cử nhân về module hóa ứng dụng iOS dưới sự hướng dẫn của tôi. David đã viết chương Đo hiệu suất Kiến trúc Module trong sách.</p>
+
+        <h2>Cách Đóng Góp</h2>
+        <p>Hãy thoải mái đóng góp cho tác phẩm này bằng cách mở một Pull Request trên GitHub.</p>
+      </section>
+
+      <hr>
+
+      <!-- TOC -->
+      <section class="chapter" id="toc">
+        <div class="chapter-number">Điều hướng</div>
+        <h1>Mục Lục</h1>
+        <div class="toc-grid">
+          <a href="#intro" class="toc-item"><span class="toc-num">01</span><span class="toc-text">Giới thiệu</span></a>
+          <a href="#modular-arch" class="toc-item"><span class="toc-num">02</span><span class="toc-text">Kiến trúc Module</span></a>
+          <a href="#libraries" class="toc-item"><span class="toc-num">03</span><span class="toc-text">Thư viện trên hệ sinh thái Apple</span></a>
+          <a href="#swift-compiler" class="toc-item"><span class="toc-num">04</span><span class="toc-text">Swift Compiler (tùy chọn)</span></a>
+          <a href="#development" class="toc-item"><span class="toc-num">05</span><span class="toc-text">Phát triển Kiến trúc Module</span></a>
+          <a href="#app-extensions" class="toc-item"><span class="toc-num">06</span><span class="toc-text">App Extensions &amp; Apple Watch</span></a>
+          <a href="#benchmarking" class="toc-item"><span class="toc-num">07</span><span class="toc-text">Đo hiệu suất</span></a>
+          <a href="#best-practices" class="toc-item"><span class="toc-num">08</span><span class="toc-text">Application Framework - Thực hành tốt</span></a>
+          <a href="#dep-managers" class="toc-item"><span class="toc-num">09</span><span class="toc-text">Quản lý phụ thuộc</span></a>
+          <a href="#design-patterns" class="toc-item"><span class="toc-num">10</span><span class="toc-text">Design Patterns</span></a>
+          <a href="#automation" class="toc-item"><span class="toc-num">11</span><span class="toc-text">Tự động hóa dự án</span></a>
+        </div>
+      </section>
+
+      <hr>
+
+      <!-- Introduction -->
+      <section class="chapter" id="intro">
+        <div class="chapter-number">Chương 1</div>
+        <h1>Giới Thiệu</h1>
+
+        <p>Trong lĩnh vực kỹ thuật phần mềm, người ta đi từ dự án này sang dự án khác, tích lũy nhiều loại kinh nghiệm khác nhau. Đặc biệt trên iOS, cách tiếp cận nguyên khối (monolithic) thường được sử dụng. Trong một số trường hợp điều đó hoàn toàn hợp lý. Tuy nhiên, mở rộng quy mô nhóm, hoặc thậm chí nhóm của nhóm trên một ứng dụng xây dựng theo kiểu nguyên khối là điều kinh khủng và gần như không thể thực hiện được mà không ảnh hưởng đáng kể đến thời gian build hàng ngày.</p>
+
+        <p>Việc mở rộng cách tiếp cận nguyên khối lên 10+ developer sẽ rất có thể dẫn đến địa ngục. Ý tôi là giải quyết các xung đột <code>xcodeproj</code>, trong trường hợp tệ nhất, cả hai bên đổi tên, chỉnh sửa hoặc xóa cùng một tệp mã nguồn hoặc chỉnh sửa cùng một file <code>storyboard/xib</code>.</p>
+
+        <div class="info-box">
+          <strong>Điểm mấu chốt:</strong> Khi PO/PM/CTO/CEO thông báo kế hoạch phát hành một phiên bản mới của ứng dụng hoặc chia ứng dụng hiện tại thành hai phần riêng biệt, đó là lúc phải đưa ra quyết định kỹ thuật: tiếp tục với cách tiếp cận nguyên khối hay triển khai kiến trúc module.
+        </div>
+
+        <p>Cách tiếp cận tốt hơn là bắt đầu tái cấu trúc ứng dụng bằng kiến trúc module, nơi mỗi nhóm có thể chịu trách nhiệm cho các framework cụ thể (phần của ứng dụng), sau đó được liên kết với các ứng dụng hướng tới khách hàng cuối.</p>
+
+        <h2>Bạn Cần Gì</h2>
+        <ul>
+          <li>Phiên bản mới nhất của <a href="https://apps.apple.com/us/app/xcode/id497799835?mt=12" target="_blank">Xcode</a> để biên dịch các ví dụ demo</li>
+          <li><a href="https://brew.sh/" target="_blank">Homebrew</a> để cài đặt các phụ thuộc bắt buộc</li>
+          <li><a href="https://www.ruby-lang.org/en/" target="_blank">Ruby</a> và <a href="https://bundler.io/" target="_blank">Bundler</a> để chạy script và tải các Ruby gems</li>
+        </ul>
+
+        <h2>Cuốn sách này nói về điều gì</h2>
+        <p>Cuốn sách này mô tả những điều cơ bản của việc xây dựng kiến trúc module trên iOS, có thể mở rộng sang tất cả các nền tảng Apple. Bạn sẽ tìm thấy các ví dụ về các cách tiếp cận khác nhau, loại framework, ưu và nhược điểm, các vấn đề thường gặp... Cuốn sách tập trung vào kiến trúc cấp cao, module hóa dự án và cộng tác hiệu quả nhất.</p>
+
+        <h2>Cuốn sách này KHÔNG nói về điều gì</h2>
+        <p><strong>SwiftUI.</strong></p>
+      </section>
+
+      <hr>
+
+      <!-- Modular Architecture -->
+      <section class="chapter" id="modular-arch">
+        <div class="chapter-number">Chương 2</div>
+        <h1>Kiến Trúc Module</h1>
+        <blockquote><p><strong>Modular</strong> — <em>tính từ: sử dụng hoặc liên quan đến một module hoặc các module làm cơ sở thiết kế hoặc xây dựng: "các đơn vị nhà ở module"</em></p></blockquote>
+
+        <p>Kiến trúc module sẽ mang lại cho chúng ta nhiều tự do hơn khi đưa ra các quyết định sản phẩm ảnh hưởng đến kỹ thuật ứng dụng tổng thể. Những điều này bao gồm: xây dựng ứng dụng khác cho cùng một công ty, mở mã nguồn một số phần của codebase hiện có, mở rộng nhóm developer...</p>
+
+        <h2 id="design">Thiết Kế</h2>
+        <p>Trong cuốn sách này, tôi chọn sử dụng kiến trúc linh hoạt nhất, đó là <strong>kiến trúc năm tầng</strong>:</p>
+
+        <div class="layer-diagram">
+          <div class="layer layer-1"><div class="layer-num">1</div><div class="layer-info"><div class="layer-name">Application (Ứng dụng)</div><div class="layer-desc">Các sản phẩm hướng tới khách hàng cuối — ghép nối tất cả các phần lại</div></div></div>
+          <div class="layer layer-2"><div class="layer-num">2</div><div class="layer-info"><div class="layer-name">Domain (Nghiệp vụ)</div><div class="layer-desc">Triển khai nhu cầu nghiệp vụ của dự án, chứa flow người dùng</div></div></div>
+          <div class="layer layer-3"><div class="layer-num">3</div><div class="layer-info"><div class="layer-name">Service (Dịch vụ)</div><div class="layer-desc">Các module hỗ trợ Domain, giao tiếp với backend, lưu trữ dữ liệu</div></div></div>
+          <div class="layer layer-4"><div class="layer-num">4</div><div class="layer-info"><div class="layer-name">Core (Lõi)</div><div class="layer-desc">Trình kích hoạt cho toàn bộ ứng dụng — Network, UIComponents, Persistence</div></div></div>
+          <div class="layer layer-5"><div class="layer-num">5</div><div class="layer-info"><div class="layer-name">Shared (Chia sẻ)</div><div class="layer-desc">Tầng hỗ trợ cho toàn framework — Logging, Analytics</div></div></div>
+        </div>
+
+        <p>Toàn bộ cấu hình với các tầng và module được gọi là <code>Application Framework</code> trong suốt cuốn sách.</p>
+
+        <h2 id="layers">Các Tầng Chi Tiết</h2>
+
+        <h3>Tầng Application</h3>
+        <p>Tầng ứng dụng bao gồm các sản phẩm hướng tới khách hàng cuối: các ứng dụng. Ứng dụng lắp ráp tất cả các phần cần thiết từ Application Framework, liên kết domains, services... Trong Application Framework, App chỉ là một container ghép nối các mảnh lại với nhau.</p>
+        <p><em>Ví dụ:</em> Trong ứng dụng e-commerce, app có thể là <code>The Shop</code> cho khách hàng trực tuyến và <code>Cashier</code> cho nhân viên của công ty.</p>
+
+        <h3>Tầng Domain</h3>
+        <p>Tầng domain liên kết các dịch vụ và các module từ các tầng bên dưới để triển khai nhu cầu nghiệp vụ. Domain chứa flow người dùng: coordinators, view controllers, views, models và view models.</p>
+        <p><em>Ví dụ:</em> Trong e-commerce, một domain có thể là <code>Checkout</code> hoặc <code>Store Items</code>.</p>
+
+        <h3>Tầng Service</h3>
+        <p>Các service là các module hỗ trợ domains. Mỗi domain có thể liên kết nhiều service để đạt được kết quả mong muốn. Các service giao tiếp với backend, lưu trữ dữ liệu và cung cấp dữ liệu cho domains.</p>
+
+        <h3>Tầng Core</h3>
+        <p>Tầng core là trình kích hoạt cho toàn bộ ứng dụng. Các service liên kết các module cần thiết từ đây như Network, Persistence. Domains liên kết UIComponents để triển khai màn hình dễ dàng hơn.</p>
+
+        <h3>Tầng Shared</h3>
+        <p>Tầng shared là tầng hỗ trợ cho toàn bộ framework. Nó có thể không cần tồn tại trong mọi trường hợp. Ví dụ điển hình là cơ chế logging — ngay cả các module tầng core cũng có thể muốn ghi log.</p>
+
+        <h2 id="iss-example">Ví Dụ: Trạm Vũ Trụ Quốc Tế (ISS)</h2>
+        <p>Ví dụ có ba ứng dụng:</p>
+        <ul>
+          <li><code>Overview</code>: app hiển thị tổng quan trạng thái trạm vũ trụ cho các phi hành gia</li>
+          <li><code>Cosmonaut</code>: app cho phi hành gia kiểm soát bộ đồ và thông tin cá nhân</li>
+          <li><code>Laboratory</code>: app kiểm soát các phòng thí nghiệm trên trạm vũ trụ</li>
+        </ul>
+
+        <h3>Ứng dụng Cosmonaut</h3>
+        <p>App <code>Cosmonaut</code> liên kết domains <code>Spacesuit</code> và <code>Cosmonaut</code>. Domain <code>Spacesuit</code> dùng <code>Radio</code> để giao tiếp với bộ đồ phi hành gia qua BLE. Domain <code>Cosmonaut</code> dùng <code>Network</code> để cập nhật Houston về trạng thái và <code>Persistence</code> để lưu dữ liệu offline.</p>
+
+        <h2>Kết Luận</h2>
+        <p>Mở rộng kiến trúc như mô tả trên không phải là vấn đề. Tuy nhiên, có những bất lợi — ví dụ như việc onboard developer mới có thể mất thời gian, đặc biệt khi đã có codebase lớn. Trong trường hợp đó, pair programming, tài liệu kiến trúc phần mềm và tài liệu module giúp người mới đi đúng hướng.</p>
+      </section>
+
+      <hr>
+
+      <!-- Libraries -->
+      <section class="chapter" id="libraries">
+        <div class="chapter-number">Chương 3</div>
+        <h1>Thư Viện trên Hệ Sinh Thái Apple</h1>
+        <p>Trong hệ sinh thái Apple, chúng ta có hai lựa chọn chính khi tạo thư viện: liên kết tĩnh (static) hoặc động (dynamic). Trước đây được gọi là <code>Cocoa Touch Framework</code>, thư viện liên kết động ngày nay đơn giản được gọi là <code>Framework</code>.</p>
+
+        <h2>Các Loại Thư Viện</h2>
+
+        <h3>Liên kết động (Dynamically linked)</h3>
+        <ul>
+          <li><strong>Dylib</strong>: Thư viện có binary Mach-O riêng (<code>.dylib</code>)</li>
+          <li><strong>Framework</strong>: Bundle chứa binary và các tài nguyên cần thiết khi runtime (<code>.framework</code>)</li>
+          <li><strong>TBDs</strong>: Text Based Dynamic Library Stubs — thư viện text dạng stub (chỉ symbols) (<code>.tbd</code>)</li>
+          <li><strong>XCFramework</strong>: Từ Xcode 11, cho phép nhóm các framework cho nhiều nền tảng (<code>.xcframework</code>)</li>
+        </ul>
+
+        <h3>Liên kết tĩnh (Statically linked)</h3>
+        <ul>
+          <li><strong>Archive</strong>: Lưu trữ các object file được tạo bởi compiler (<code>.a</code>)</li>
+          <li><strong>Framework</strong>: Chứa binary tĩnh hoặc archive tĩnh với tài nguyên (<code>.framework</code>)</li>
+          <li><strong>XCFramework</strong>: Tương tự như cho liên kết động (<code>.xcframework</code>)</li>
+        </ul>
+
+        <h2 id="dynamic-static">Dynamic vs Static — So Sánh</h2>
+        <p>Sự khác biệt chính giữa thư viện tĩnh và động nằm ở <strong>Inversion Of Control (IoC)</strong> và cách chúng được liên kết với executable chính.</p>
+
+        <div class="pros-cons">
+          <div class="pros-col">
+            <div class="col-header">✅ Dynamic — Ưu điểm</div>
+            <ul>
+              <li>Có thể mở theo yêu cầu (<code>dlopen</code>)</li>
+              <li>Liên kết bắc cầu không gặp khó khăn</li>
+              <li>Có thể thay thế mà không cần biên dịch lại</li>
+              <li>Tải vào không gian bộ nhớ riêng</li>
+              <li>Có thể dùng chung giữa các ứng dụng</li>
+              <li>Mergeable libraries (Xcode 15)</li>
+              <li>Cải thiện thời gian build nhờ tách biệt codebase</li>
+            </ul>
+          </div>
+          <div class="cons-col">
+            <div class="col-header">❌ Dynamic — Nhược điểm</div>
+            <ul>
+              <li>Khởi động ứng dụng chậm hơn</li>
+              <li>Target phải sao chép tất cả dynamic library</li>
+              <li>Kích thước binary lớn hơn</li>
+              <li>API call chậm hơn</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="pros-cons">
+          <div class="pros-col">
+            <div class="col-header">✅ Static — Ưu điểm</div>
+            <ul>
+              <li>Khởi động ứng dụng nhanh hơn</li>
+              <li>Không thể crash vì thiếu thư viện</li>
+              <li>Kích thước binary nhỏ hơn</li>
+              <li>Tốc độ gọi API bằng với executable chính</li>
+              <li>Compiler có thể tối ưu hóa thêm</li>
+            </ul>
+          </div>
+          <div class="cons-col">
+            <div class="col-header">❌ Static — Nhược điểm</div>
+            <ul>
+              <li>Không được liên kết bắc cầu</li>
+              <li>Executable chính phải biên dịch lại khi thư viện cập nhật</li>
+              <li>Thời gian build chậm hơn</li>
+            </ul>
+          </div>
+        </div>
+
+        <h2 id="examining">Kiểm Tra Thư Viện</h2>
+        <p>Apple cung cấp nhiều công cụ để khám phá thư viện đã biên dịch.</p>
+
+        <h3>Fat Headers — Kiến trúc được hỗ trợ</h3>
+        <pre><span class="pre-lang">shell</span><code>otool -fv ./UIKit</code></pre>
+
+        <h3>Xác định loại thư viện</h3>
+        <pre><span class="pre-lang">shell</span><code>otool -hv ./UIKit</code></pre>
+
+        <h3>Kiểm tra các phụ thuộc</h3>
+        <pre><span class="pre-lang">shell</span><code>otool -L ./UIKit</code></pre>
+
+        <h3>Bảng symbols</h3>
+        <pre><span class="pre-lang">shell</span><code>nm -Ca ./UIKit</code></pre>
+
+        <h3>Chuỗi ký tự trong binary</h3>
+        <pre><span class="pre-lang">shell</span><code>strings ./Alamofire</code></pre>
+
+        <h2>Hệ Thống Build Xcode</h2>
+        <p>Xcode sử dụng <strong>Xcode Build System</strong> để tạo ra các executables cuối cùng. Các bước:</p>
+        <ol>
+          <li><strong>Preprocessing</strong>: Giải quyết macros, xóa comment, import file</li>
+          <li><strong>Compiler</strong> (<code>swiftc</code>, <code>clang</code>): Biên dịch mã nguồn thành object file</li>
+          <li><strong>Assembler</strong> (<code>asm</code>): Tạo machine code có thể tái định vị</li>
+          <li><strong>Linker</strong> (<code>ld</code>): Liên kết các object file thành Mach-O executable</li>
+          <li><strong>Loader</strong>: Đưa executable vào bộ nhớ và khởi động thực thi</li>
+        </ol>
+      </section>
+
+      <hr>
+
+      <!-- Swift Compiler -->
+      <section class="chapter" id="swift-compiler">
+        <div class="chapter-number">Chương 4 (Tùy chọn)</div>
+        <h1>Swift Compiler</h1>
+        <p>Chương này là tùy chọn. Biết cách compiler hoạt động không phải kiến thức bắt buộc nhưng rất thú vị và cung cấp cái nhìn hoàn chỉnh về quá trình từ code dễ đọc của con người đến chạy trên phần cứng.</p>
+
+        <h2>Kiến Trúc Compiler Swift</h2>
+        <p>Kiến trúc <code>swiftc</code> bao gồm bảy bước:</p>
+
+        <h3>1. Parsing — Phân tích cú pháp</h3>
+        <p>Parser chịu trách nhiệm tạo Abstract Syntax Tree (AST) mà không có thông tin semantic hay type. Để xem AST đã parse:</p>
+        <pre><span class="pre-lang">bash</span><code>swiftc ./employee.swift -dump-parse</code></pre>
+
+        <h3>2. Semantic Analysis — Phân tích ngữ nghĩa</h3>
+        <p>Chuyển đổi AST đã parse thành dạng đã kiểm tra type đầy đủ. Để xem AST sau phân tích ngữ nghĩa:</p>
+        <pre><span class="pre-lang">bash</span><code>swiftc ./employee.swift -dump-ast</code></pre>
+
+        <h3>3. Clang Importer</h3>
+        <p>Import các module Clang và ánh xạ C/Objective-C APIs sang Swift APIs tương ứng — đây là cầu nối nổi tiếng giữa ObjC/C và Swift.</p>
+
+        <h3>4. SIL Generation — Tạo Swift Intermediate Language</h3>
+        <p>SIL là ngôn ngữ trung gian cấp cao dành riêng cho Swift, phù hợp để phân tích và tối ưu hóa tiếp theo:</p>
+        <pre><span class="pre-lang">bash</span><code>swiftc ./employee.swift -emit-sil</code></pre>
+
+        <h3>5. SIL Guaranteed Transformations</h3>
+        <p>Thực hiện các chẩn đoán dataflow bổ sung ảnh hưởng đến tính đúng đắn của chương trình. Kết quả là "canonical" SIL.</p>
+
+        <h3>6. SIL Optimizations</h3>
+        <p>Thực hiện tối ưu hóa cấp cao đặc thù Swift như ARC optimization, devirtualization, và generic specialization.</p>
+
+        <h3>7. LLVM IR Generation</h3>
+        <p>Hạ cấp SIL xuống LLVM IR để LLVM có thể tiếp tục tối ưu và tạo machine code:</p>
+        <pre><span class="pre-lang">bash</span><code>swiftc ./employee.swift -emit-ir | more</code></pre>
+
+        <h3>Xuất dylib thủ công</h3>
+        <pre><span class="pre-lang">bash</span><code>swiftc ./employee.swift -emit-library -emit-module -parse-as-library -module-name Employee</code></pre>
+      </section>
+
+      <hr>
+
+      <!-- Development -->
+      <section class="chapter" id="development">
+        <div class="chapter-number">Chương 5</div>
+        <h1>Phát Triển Kiến Trúc Module</h1>
+        <p>Lý thuyết cần thiết về thư viện Apple đã được giải thích. Bây giờ là lúc đi sâu vào giai đoạn xây dựng. Trước tiên, hãy thực hiện thủ công rồi tự động hóa quá trình tạo thư viện.</p>
+
+        <h2>Tạo Cấu Trúc Workspace</h2>
+        <p>Đầu tiên, tạo ứng dụng Cosmonaut từ Xcode trong thư mục <code>iss_application_framework/app/</code>. Sau đó trong Xcode, chọn <code>File → Save As Workspace</code>. Đây là nơi workspace chứa nhiều project (apps và frameworks).</p>
+
+        <h3>Tự Động Hóa Quá Trình</h3>
+        <p>Fastlane cung cấp lane <code>make_new_project</code> nhận ba đối số: <code>type</code> {app|framework}, <code>project_name</code> và <code>destination_path</code>:</p>
+        <pre><span class="pre-lang">shell</span><code>fastlane make_new_project type:framework project_name:Spacesuit destination_path:../domain/Spacesuit</code></pre>
+
+        <h2 id="xcodegen">Generating Projects — Hello XcodeGen</h2>
+        <p><a href="https://github.com/yonaskolb/XcodeGen" target="_blank">XcodeGen</a> là chương trình tạo file <code>pbxproj</code> dựa trên file YAML được sắp xếp tốt, giúp tránh các xung đột trong file <code>project.pbxproj</code> nổi tiếng của Apple.</p>
+
+        <pre><span class="pre-lang">yaml</span><code>name: Cosmonaut
+settings:
+  groups:
+    - BuildSettings
+
+targets:
+  Cosmonaut:
+    type: application
+    platform: iOS
+    sources: Cosmonaut
+    dependencies:
+      # Domains
+      - framework: ISSCosmonaut.framework
+        implicit: true
+      - framework: ISSSpacesuit.framework
+        implicit: true
+      # Services
+      - framework: ISSSpacesuitService.framework
+        implicit: true
+      # Core
+      - framework: ISSNetwork.framework
+        implicit: true</code></pre>
+
+        <h2 id="ground-rules">Quy Tắc Nền</h2>
+        <p>Hai mẫu quan trọng trong kiến trúc ISS:</p>
+
+        <h3>Phụ thuộc chéo (Cross-linking dependencies)</h3>
+        <p>Bất kỳ framework nào KHÔNG được phép liên kết các module trên cùng tầng. Điều này nhằm ngăn tạo vòng liên kết chéo giữa các framework. Nếu Network module liên kết Radio module và ngược lại, compiler sẽ gặp vấn đề nghiêm trọng.</p>
+
+        <h3>Liên kết dọc (Vertical linking)</h3>
+        <p>Mỗi tầng chỉ có thể liên kết framework từ tầng con của nó. Điều này đảm bảo mẫu liên kết dọc.</p>
+
+        <h2>Core Framework</h2>
+        <p>Core framework là một Framework target khác trong Xcode project của framework chính. Ví dụ, trong <code>SpacesuitService</code>, core framework sẽ là <code>SpacesuitServiceCore</code>. Core framework này chứa các giao thức và kiểu dữ liệu công khai để các tầng cao hơn sử dụng.</p>
+
+        <pre><span class="pre-lang">yaml</span><code>ISSSpacesuitService:
+  type: framework
+  platform: iOS
+  sources: SpacesuitService
+  dependencies:
+  - framework: ISSSpacesuitServiceCore.framework
+    implicit: true
+
+ISSSpacesuitServiceCore:
+  type: framework
+  platform: iOS
+  sources: SpacesuitServiceCore
+  dependencies:
+    - framework: ISSNetworkCore.framework
+      implicit: true</code></pre>
+
+        <h2 id="testing">Kiểm Thử</h2>
+
+        <h3>Unit Testing độc lập</h3>
+        <p>Mỗi framework có thể được kiểm thử độc lập mà không cần app. Framework project chứa bundle kiểm thử riêng, mock tất cả phụ thuộc bên ngoài bằng Mock Framework.</p>
+
+        <h3>Application Framework App</h3>
+        <p>Mỗi framework domain có thể có Application Framework App riêng — ứng dụng thực tế chạy trên simulator với các dependencies thực. Điều này cho phép UI testing trong môi trường bán thực tế.</p>
+
+        <h3>Mock Framework</h3>
+        <p>Mock Framework là framework đặc biệt chứa các mock triển khai các giao thức từ Core. Điều này cho phép kiểm thử framework độc lập bằng cách thay thế các phụ thuộc thực bằng mock.</p>
+      </section>
+
+      <hr>
+
+      <!-- App Extensions -->
+      <section class="chapter" id="app-extensions">
+        <div class="chapter-number">Chương 6</div>
+        <h1>App Extensions &amp; Apple Watch</h1>
+        <p>App Extensions cho phép ứng dụng mở rộng chức năng tùy chỉnh cho người dùng ngay cả khi ứng dụng không đang chạy. Một số loại phổ biến:</p>
+        <ul>
+          <li><strong>Today Extensions (Widgets)</strong> — hiển thị thông tin nhanh trên Home Screen</li>
+          <li><strong>Share Extensions</strong> — chia sẻ nội dung từ ứng dụng khác</li>
+          <li><strong>Custom Keyboard Extensions</strong> — bàn phím tùy chỉnh dùng trên toàn hệ thống</li>
+          <li><strong>SiriKit Extensions</strong> — tích hợp với Siri</li>
+          <li><strong>Notification Content Extensions</strong> — tùy chỉnh giao diện thông báo</li>
+          <li>Và nhiều loại khác...</li>
+        </ul>
+
+        <h2>Thiết Lập App Extension trong Kiến Trúc Module</h2>
+        <p>Trong XcodeGen, chỉ cần đảm bảo App Extension được gán vào target được mở rộng:</p>
+        <pre><span class="pre-lang">yaml</span><code>CosmonautApp:
+  type: application
+  platform: iOS
+  sources: CosmonautApp
+  dependencies:
+    - target: CosmonautWidgetExtension   # Target mới
+    - framework: ISSCosmonautService.framework
+      implicit: true
+
+CosmonautWidgetExtension:
+  type: app-extension
+  platform: iOS
+  sources: CosmonautWidgetExtension
+  dependencies:
+  - framework: ISSCosmonautService.framework
+    implicit: true
+    codeSign: false   # Đã ký từ app chính, tránh ký lại</code></pre>
+
+        <div class="info-box">
+          <strong>Lưu ý quan trọng:</strong> Đối với production builds, không được merge các framework được chia sẻ giữa app chính và extension thành một framework duy nhất thông qua <code>mergable libraries</code>. Nếu làm vậy, app extension sẽ không tìm thấy executable và bị crash khi khởi động.
+        </div>
+      </section>
+
+      <hr>
+
+      <!-- Benchmarking -->
+      <section class="chapter" id="benchmarking">
+        <div class="chapter-number">Chương 7</div>
+        <h1>Đo Hiệu Suất Kiến Trúc Module</h1>
+
+        <h2>Kết Quả Kiểm Thử</h2>
+
+        <h3>Kích thước ứng dụng</h3>
+        <p>Các ứng dụng liên kết tĩnh nhỏ hơn một chút so với các ứng dụng liên kết động do compiler có thể loại bỏ các symbol không được sử dụng trong quá trình biên dịch.</p>
+
+        <h3>Sử dụng bộ nhớ</h3>
+        <p>Mức sử dụng bộ nhớ của ứng dụng nguyên khối và ứng dụng module tương đương nhau vì tất cả framework đều được nạp vào bộ nhớ khi khởi động.</p>
+
+        <h3>Thời gian biên dịch</h3>
+        <p>Biên dịch ứng dụng bốn tầng liên kết động mất khoảng <strong>32%</strong> lâu hơn ứng dụng liên kết tĩnh trong lần build sạch đầu tiên. Tuy nhiên, build tăng dần (incremental builds) cho tất cả kiến trúc module nhanh hơn build sạch từ 2-3 lần — điều này không xảy ra với ứng dụng nguyên khối.</p>
+
+        <h3>Thời gian khởi động</h3>
+        <p>Thời gian khởi động phụ thuộc cao vào thiết bị. Kết quả kiểm thử trên các iPhone:</p>
+        <ul>
+          <li><strong>iPhone 6s</strong>: 14.4s (ứng dụng bốn tầng, liên kết động, 300 frameworks)</li>
+          <li><strong>iPhone Xs</strong>: 2.94s</li>
+          <li><strong>iPhone 14 Pro</strong>: 1.54s</li>
+        </ul>
+        <div class="info-box">
+          <strong>Kết luận:</strong> Số lượng dynamic framework là yếu tố đóng góp lớn nhất vào thời gian khởi động ứng dụng. Giảm từ 300 xuống 30 framework trong kiến trúc bốn tầng giúp giảm thời gian khởi động khoảng 7.7 lần trên iPhone 14 Pro.
+        </div>
+      </section>
+
+      <hr>
+
+      <!-- Best Practices -->
+      <section class="chapter" id="best-practices">
+        <div class="chapter-number">Chương 8</div>
+        <h1>Application Framework — Thực Hành Tốt</h1>
+
+        <h2>Bí Mật Ứng Dụng</h2>
+        <h3>Cách xử lý secrets</h3>
+        <p>Không bao giờ lưu trữ secrets trong source code. Sử dụng các công cụ như GnuPG (GPG) để mã hóa secrets và gem <code>mobile-secrets</code> để quản lý chúng.</p>
+
+        <h2>Workflow</h2>
+        <h3>Nhóm</h3>
+        <p>Kiến trúc module cho phép các nhóm độc lập làm việc trên các phần riêng biệt của ứng dụng. Mỗi nhóm sở hữu một domain cụ thể với tất cả các phụ thuộc của nó.</p>
+
+        <h3>Git &amp; Đóng Góp</h3>
+        <p>Sử dụng các quy ước cam kết rõ ràng và pull request. Kiến trúc module giảm thiểu xung đột merge do mỗi framework là một project độc lập.</p>
+
+        <h3>Khả năng mở rộng</h3>
+        <p>Thêm team mới có nghĩa là thêm framework mới vào đúng tầng. Không cần sửa đổi code hiện có.</p>
+
+        <h2>Các Vấn Đề Thường Gặp</h2>
+        <h3>Bảo trì</h3>
+        <p>Duy trì nền tảng phần mềm lớn có thể thực sự khó khăn, bao gồm quản lý CI/CD, dự án cũ, legacy code và cập nhật với công cụ phát triển mới nhất.</p>
+        <h3>Phong cách mã</h3>
+        <p>Đảm bảo nhất quán code style trên nhiều team. Công cụ như SwiftLint và cài đặt build chung giúp duy trì nhất quán.</p>
+        <h3>Nhóm chưa hoàn toàn tự chủ</h3>
+        <p>Đôi khi một nhóm cần chức năng từ một nhóm khác. Hãy tuân theo các quy tắc liên kết — Core framework hoặc tầng Shared là nơi phù hợp cho code dùng chung.</p>
+      </section>
+
+      <hr>
+
+      <!-- Dependency Managers -->
+      <section class="chapter" id="dep-managers">
+        <div class="chapter-number">Chương 9</div>
+        <h1>Quản Lý Phụ Thuộc</h1>
+
+        <h2>CocoaPods</h2>
+        <p>CocoaPods là trình quản lý phụ thuộc bên thứ ba làm mọi thứ cho developer dưới mui xe. Nó chuyển đổi Xcode project thành workspace và thêm Pods project chứa tất cả binary.</p>
+        <pre><span class="pre-lang">ruby</span><code>target 'CosmonautApp' do
+  use_frameworks!
+  pod 'SnapKit', '5.0.0'
+  # Liên kết tất cả dynamic library cần thiết tới app target
+  add_linked_libs_from_sdks_to_app
+end</code></pre>
+
+        <h2>Carthage</h2>
+        <p>Carthage để developer tự do hơn. Nó chỉ build các thư viện; developer tự quyết định cách liên kết chúng. Thực hiện với lệnh:</p>
+        <pre><span class="pre-lang">shell</span><code>carthage update --platform iOS</code></pre>
+        <p>Các thư viện đã biên dịch có thể lưu trên cloud storage nơi mỗi developer hoặc CI có thể pull. Tuy nhiên, Carthage yêu cầu nhiều công hơn để cấu hình và bảo trì. Một điểm quan trọng cần lưu ý là <strong>khả năng tương thích ABI</strong> — toàn bộ team phải cập nhật Xcode cùng lúc.</p>
+
+        <h2>Swift Package Manager (SwiftPM)</h2>
+        <p>SwiftPM là trình quản lý phụ thuộc chính thức của Apple. Hoạt động tương tự CocoaPods nhưng không cần hành động bổ sung — Xcode tự lo. SwiftPM không yêu cầu workspace vì nó thêm trực tiếp phụ thuộc vào Xcode project hiện tại.</p>
+
+        <h2>Kết Luận</h2>
+        <p>Lựa chọn đúng có thể không rõ ràng. Bắt đầu với <strong>CocoaPods hoặc SwiftPM</strong>, sau đó thay thế một số thư viện lớn bằng <strong>Carthage</strong> để giảm thời gian biên dịch có thể là cách tiếp cận tốt.</p>
+      </section>
+
+      <hr>
+
+      <!-- Design Patterns -->
+      <section class="chapter" id="design-patterns">
+        <div class="chapter-number">Chương 10</div>
+        <h1>Design Patterns</h1>
+        <p>Design patterns giúp developer giải quyết các vấn đề phức tạp theo cách đã biết, có tổ chức và có cấu trúc. Khi developer mới được onboard, họ có thể đã biết các pattern được sử dụng.</p>
+
+        <h2>Coordinator</h2>
+        <p>Coordinator là pattern điều hướng nổi tiếng nhất trong phát triển iOS. Mỗi domain framework được đại diện bởi coordinator như điểm vào. Coordinator khởi tạo nội bộ view controllers và view models và điều phối flow trình bày.</p>
+        <pre><span class="pre-lang">swift</span><code>public protocol Coordinator: AnyObject {
+    var childCoordinators: [Coordinator] { get set }
+    var finish: ((DeepLink?) -> Void)? { get set }
+    func start()
+    func start(link: DeepLink) -> Bool
+}
+
+public class CosmonautCoordinator: NavigationCoordinator {
+    public enum CosmonautLink { case info }
+
+    public lazy var navigationController = UINavigationController()
+    public var childCoordinators: [Coordinator] = []
+
+    public func start() {
+        navigationController.setViewControllers([
+            makeCosmonautViewController()
+        ], animated: false)
+    }
+}</code></pre>
+
+        <h2>Strategy</h2>
+        <p>Pattern Strategy đặc biệt hữu ích khi phát triển các component tái sử dụng như views. Trong Swift, có thể đạt được với <code>enum</code> thay vì protocols truyền thống — mỗi case đại diện một strategy.</p>
+
+        <h2>Configuration</h2>
+        <p>Configuration rất phù hợp cho tất cả services và components phục vụ nhiều mục đích. Đây là object đơn giản mô tả cách một instance nên trông hoặc hoạt động như thế nào.</p>
+        <pre><span class="pre-lang">swift</span><code>extension AppCoordinator {
+    public struct Configuration {
+        public enum PresentatinStyle {
+            case tabBar, navigation
+        }
+        public var style: PresentatinStyle
+        public var menuCoordinator: Coordinator?
+    }
+}</code></pre>
+
+        <h2>Decoupling — Tách rời</h2>
+        <p>Khi ứng dụng có hai flavour (ví dụ: <code>USCosmonautApp</code> và <code>RUCosmonautApp</code>), cần tách rời các implementation và cung cấp interface chung trong framework riêng (<code>CosmonautServiceCore</code>). Sau đó cả hai <code>USCosmonautService</code> và <code>RUCosmonautService</code> liên kết <code>CosmonautServiceCore</code> và cung cấp implementations.</p>
+
+        <h2>MVVM + C</h2>
+        <p>Pattern yêu thích kết hợp Model-View-ViewModel với Coordinator. MVVM xử lý logic của màn hình, Coordinator xử lý điều hướng. Kết hợp này tách rời hoàn toàn logic UI khỏi logic điều hướng.</p>
+
+        <h2>Protocol Oriented Programming (POP)</h2>
+        <p>Swift được xây dựng từ đầu với POP. Sử dụng protocols thay vì inheritance cho phép linh hoạt hơn, dễ test hơn và tái sử dụng code tốt hơn trong kiến trúc module.</p>
+      </section>
+
+      <hr>
+
+      <!-- Automation -->
+      <section class="chapter" id="automation">
+        <div class="chapter-number">Chương 11</div>
+        <h1>Tự Động Hóa Dự Án</h1>
+
+        <h2>Fastlane</h2>
+        <p>Fastlane là công cụ tự động hóa iOS/Android mã nguồn mở. Nó được sử dụng để tự động hóa các tác vụ như tạo project mới, chạy test, tạo build, phân phối ứng dụng...</p>
+        <pre><span class="pre-lang">ruby</span><code>lane :generate do
+  Dir["../**/project.yml"].each do |project_path|
+    next if project_path.include? "fastlane"
+    UI.success "Generating project: #{project_path}"
+    `xcodegen -s #{project_path}`
+  end
+end</code></pre>
+
+        <h2>Continuous Integration (CI)</h2>
+        <p>CI đảm bảo chất lượng codebase trước khi merge. Các loại test được CI thực thi:</p>
+        <ul>
+          <li><strong>Unit tests</strong> — đảm bảo logic code không thay đổi</li>
+          <li><strong>UI tests</strong> — đảm bảo UI trông giống nhau sau thay đổi</li>
+          <li><strong>Integration tests</strong> — đảm bảo app khởi động được, không crash</li>
+          <li><strong>Acceptance tests</strong> — đảm bảo giá trị nghiệp vụ được duy trì</li>
+        </ul>
+
+        <h2>Continuous Delivery (CD)</h2>
+        <p>Ngay sau khi merge, CD bắt đầu. Alpha builds được tạo để nhanh chóng phát hiện nếu có sự cố. Developer nên làm việc theo cách mà trạng thái development của codebase luôn sẵn sàng cho production.</p>
+
+        <h2>Ruby — Người Bạn Tốt Nhất của Developer</h2>
+        <p>Nếu bạn chưa học Ruby, hãy học đi — nó rất tuyệt!</p>
+      </section>
+
+      <hr>
+
+      <!-- The End -->
+      <section class="chapter" id="theend">
+        <div class="chapter-number">Lời kết</div>
+        <h1>Kết Thúc</h1>
+        <p>Khi mọi thứ diễn ra tốt đẹp, các container sẽ được chuyển trên tàu đến khách hàng cuối và cuộc sống của tất cả đều tuyệt vời. Tuy nhiên, nếu nó bị kẹt ở Suez như chiếc phà Evergreen, đừng hoảng loạn. Đó chỉ là phần mềm và mọi thứ đều có thể sửa được — trừ khi bạn chạy code xấu trên database production với chính sách backup của Schrödinger. Trong trường hợp đó, cầu mong tất cả băng thông mạng đều ở bên bạn.</p>
+
+        <blockquote>
+          <p>Nếu bạn đã đọc đến trang này thì tôi muốn cảm ơn bạn rất nhiều vì đã đọc cuốn sách này và tôi hy vọng nó đã soi sáng cho bạn ít nhất ở một số phần của quá trình phát triển kiến trúc module.</p>
+        </blockquote>
+
+        <p>Đừng ngần ngại liên hệ qua <a href="mailto:info@cyrilcermak.com">email</a> hoặc kết nối trên <a href="https://www.linkedin.com/in/cyril-cermak-210a8b6b/" target="_blank">LinkedIn</a> nếu bạn có câu hỏi, góp ý hoặc chỉ muốn chia sẻ vài dòng.</p>
+        <p><strong>Cảm ơn!</strong></p>
+
+        <div class="card" style="margin-top:2rem; text-align:center; padding: 2rem;">
+          <div class="card-title" style="text-align:center">📄 Tải tài liệu gốc</div>
+          <p style="max-width:100%; text-align:center; color: var(--color-text-muted);">Tải phiên bản đầy đủ của tài liệu gốc tiếng Anh</p>
+          <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:1rem;">
+            <a href="https://github.com/CyrilCermak/modular_architecture_on_ios/blob/master/modular_architecture_on_ios.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:0.5rem; padding:0.625rem 1.25rem; background:var(--color-primary); color:white; border-radius:var(--radius-md); text-decoration:none; font-family:var(--font-ui); font-size:0.85rem; font-weight:600;">📥 Tải PDF</a>
+            <a href="https://github.com/CyrilCermak/modular_architecture_on_ios/blob/master/modular_architecture_on_ios.epub" target="_blank" style="display:inline-flex; align-items:center; gap:0.5rem; padding:0.625rem 1.25rem; background:var(--color-surface-offset); color:var(--color-text); border-radius:var(--radius-md); text-decoration:none; font-family:var(--font-ui); font-size:0.85rem; font-weight:600; border:1px solid var(--color-border);">📚 Tải ePUB</a>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /.content -->
+  </div><!-- /.main -->
+</div><!-- /.layout -->
+
+<script>
+(function(){
+  const t = document.querySelector('[data-theme-toggle]');
+  const r = document.documentElement;
+  let d = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  r.setAttribute('data-theme', d);
+  if(t) {
+    function setIcon(theme) {
+      t.innerHTML = theme === 'dark'
+        ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+        : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    }
+    setIcon(d);
+    t.addEventListener('click', () => {
+      d = d === 'dark' ? 'light' : 'dark';
+      r.setAttribute('data-theme', d);
+      setIcon(d);
+    });
+  }
+})();
+
+function toggleMenu() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('active');
+}
+function closeMenu() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('active');
+}
+
+// Scrollspy for sidebar navigation
+const navLinks = document.querySelectorAll('.nav-link');
+const chapters = document.querySelectorAll('.chapter');
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if(entry.isIntersecting) {
+      const id = entry.target.id;
+      navLinks.forEach(l => {
+        l.classList.remove('active');
+        if(l.getAttribute('href') === '#' + id) l.classList.add('active');
+      });
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+
+chapters.forEach(ch => observer.observe(ch));
+
+// Close sidebar on nav link click (mobile)
+navLinks.forEach(link => {
+  link.addEventListener('click', () => {
+    if(window.innerWidth <= 900) closeMenu();
+  });
+});
+</script>
+</body>
+</html>
